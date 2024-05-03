@@ -46,8 +46,8 @@
 @ DQMIN_PHASE      %le                   0
 @ TITLE            %08s "no-title"
 @ ORIGIN           %16s "5.09.01 Linux 64"
-@ DATE             %08s "02/05/24"
-@ TIME             %08s "15.20.47"
+@ DATE             %08s "03/05/24"
+@ TIME             %08s "17.47.49"
 * NAME                                S               BETX               ALFX               BETY               ALFY                MUX                MUY                 DX                 DY                DPX                DPY                  X                  Y                K1L               K1SL                K2L                K3L                K4L                 WX                 WY               PHIX               PHIY               DMUX               DMUY KEYWORD                           DBX                DBY                R11                R12                R21                R22 
 $ %s                                %le                %le                %le                %le                %le                %le                %le                %le                %le                %le                %le                %le                %le                %le                %le                %le                %le                %le                %le                %le                %le                %le                %le                %le %s                                %le                %le                %le                %le                %le                %le 
  "BPMYB.5L2.B1"                  28.288        178.5830342        2.783494275        36.84790142      -0.9948862099      0.02843285998       0.1288822851      -0.1582088357                  0     0.002438579008                  0                  0                  0                  0                  0                  0                  0                  0        6.825685164         36.1675369      -0.3291600526      0.01945043101      0.08779316106       -3.333166014 "MONITOR"                            0                  0                 -0                 -0                 -0                 -0
