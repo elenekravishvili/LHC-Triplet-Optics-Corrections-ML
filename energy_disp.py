@@ -55,7 +55,7 @@ error_table=energy_disp_instance.madx.table.cetab.dframe()
 summ_table=energy_disp_instance.madx.table.summ.dframe().deltap
 
 print(summ_table)
-"""
+
 #plt.plot(s, beta_beat, label='Beta_beat')
 plt.plot(s, beta_x, label='Beta_nominal')
 plt.plot(s, beta_x_disp, label='Beta_Disp')
@@ -65,4 +65,3 @@ plt.title('Beta_x vs S')
 plt.legend()
 plt.grid(True)
 plt.show()
-"""
