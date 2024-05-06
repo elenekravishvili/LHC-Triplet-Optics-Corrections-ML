@@ -42,7 +42,7 @@ def main():
 
     start = time.time()
     set_name = f"100%triplet_ip1_20%ip5_{np.random.randint(0, 99999)}"
-    num_sim = 5
+    num_sim = 3
     valid_samples = []
     GENERATE_DATA = True
 
@@ -57,7 +57,7 @@ def main():
             if sample is not None:
                 valid_samples.append(sample)
         print("Number of generated samples: {}".format(len(valid_samples)))
-        np.save('./data_with_energy_offset/{}.npy'.format(set_name), np.array(valid_samples, dtype=object))
+        np.save('./data_tripleterrors/{}.npy'.format(set_name), np.array(valid_samples, dtype=object))
     stop = time.time()
     print('Execution time (s): ', stop-start)
 
@@ -107,15 +107,15 @@ def create_sample(index):
 
         # Reading errors from MADX tables
         triplet_errors, arc_errors_b1, arc_errors_b2, mqt_errors_b1, mqt_errors_b2,\
-        mqt_knob_errors_b1, mqt_knob_errors_b2, misalign_errors, deltap_b1, deltap_b2= \
+        mqt_knob_errors_b1, mqt_knob_errors_b2, misalign_errors= \
         get_errors_from_sim(common_errors, b1_errors, b2_errors, \
-                b1_tw_before_match, b1_tw_after_match, b2_tw_before_match, b2_tw_after_match, b1_summ, b2_summ)
+                b1_tw_before_match, b1_tw_after_match, b2_tw_before_match, b2_tw_after_match)
         
         # Create a training sample
         sample = delta_beta_star_x_b1, delta_beta_star_y_b1, delta_beta_star_x_b2, delta_beta_star_y_b2, \
             delta_mux_b1, delta_muy_b1, delta_mux_b2, delta_muy_b2, n_disp_b1, n_disp_b2, \
             beta_bpm_x_b1, beta_bpm_y_b1, beta_bpm_x_b2, beta_bpm_y_b2, \
-            triplet_errors, deltap_b1, deltap_b2 #, arc_errors_b1, arc_errors_b2, mqt_errors_b1,\
+            triplet_errors #, arc_errors_b1, arc_errors_b2, mqt_errors_b1,\
             #mqt_errors_b2, mqt_knob_errors_b1, mqt_knob_errors_b2, misalign_errors
 
         
@@ -139,7 +139,7 @@ def create_sample(index):
 
 # Read all generated error tables (as tfs), return k1l absolute for sample output
 def get_errors_from_sim(common_errors, b1_errors, b2_errors, b1_tw_before_match,\
-                            b1_tw_after_match, b2_tw_before_match, b2_tw_after_match, b1_summ, b2_summ):
+                            b1_tw_after_match, b2_tw_before_match, b2_tw_after_match):
     # Triplet errors  
     triplet_errors = common_errors.k1l
     misalign_errors = common_errors.ds
@@ -173,15 +173,11 @@ def get_errors_from_sim(common_errors, b1_errors, b2_errors, b1_tw_before_match,
     mqt_errors_b2 = np.array(tfs_error_file_b2.loc[mqt_names_b2, "k1l"].values, dtype=float)
 
 
-    deltap_b1=b1_summ.deltap
-    #print("Energy disp for beam 1",  deltap_b1)
-    deltap_b2=b2_summ.deltap
-    #print("energy disp for beam 2 " ,deltap_b2)
+
 
     return np.array(triplet_errors), np.array(arc_errors_b1), \
         np.array(arc_errors_b2), np.array(mqt_errors_b1), np.array(mqt_errors_b2),\
-        np.array(mqt_knob_errors_b1), np.array(mqt_knob_errors_b2), np.array(misalign_errors),\
-        np.array(deltap_b1),np.array(deltap_b2)
+        np.array(mqt_knob_errors_b1), np.array(mqt_knob_errors_b2), np.array(misalign_errors)
 
 
 

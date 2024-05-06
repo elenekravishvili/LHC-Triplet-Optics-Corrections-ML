@@ -20,54 +20,6 @@ def main():
     input_data, output_data = merge_data(data_path, noise)
 
 
-def load_data_with_dispersion(set_name, noise):
-    
-    all_samples = np.load('./data_with_disp/{}.npy'.format(set_name), allow_pickle=True)
-    
-
-    
-    ### sample with energy dispersion ###
-    delta_beta_star_x_b1, delta_beta_star_y_b1, delta_beta_star_x_b2, \
-        delta_beta_star_y_b2, delta_mux_b1, delta_muy_b1, delta_mux_b2, \
-            delta_muy_b2, n_disp_b1, n_disp_b2,\
-            beta_bpm_x_b1, beta_bpm_y_b1, beta_bpm_x_b2, beta_bpm_y_b2, \
-           triplet_errors, deltap_b1, deltap_b2 = all_samples.T
-    ###                               ###
-
-    
-    delta_beta_star_x_b1=add_beta_star_noise(delta_beta_star_x_b1, noise=0.002)
-    delta_beta_star_y_b1=add_beta_star_noise(delta_beta_star_y_b1, noise=0.002)
-
-    delta_beta_star_x_b2=add_beta_star_noise(delta_beta_star_x_b2, noise=0.002)
-    delta_beta_star_y_b2=add_beta_star_noise(delta_beta_star_y_b2, noise=0.002)
-
-
-    deltap_b1=add_disp_noise(deltap_b1, 0.002)
-    deltap_b2=add_disp_noise(deltap_b2, 0.002)
-
-
-
-    delta_mux_b1 = [add_phase_noise(delta_mu, beta_bpm, noise) for delta_mu, beta_bpm in zip(delta_mux_b1, beta_bpm_x_b1)]
-    delta_muy_b1 = [add_phase_noise(delta_mu, beta_bpm, noise) for delta_mu, beta_bpm in zip(delta_muy_b1, beta_bpm_y_b1)]
-    delta_mux_b2 = [add_phase_noise(delta_mu, beta_bpm, noise) for delta_mu, beta_bpm in zip(delta_mux_b2, beta_bpm_x_b2)]
-    delta_muy_b2 = [add_phase_noise(delta_mu, beta_bpm, noise) for delta_mu, beta_bpm in zip(delta_muy_b2, beta_bpm_y_b2)]
-
-    input_data = np.concatenate( (np.vstack(delta_mux_b1), np.vstack(delta_muy_b1), \
-        np.vstack(delta_mux_b2), np.vstack(delta_muy_b2)),\
-             np.vstack(delta_beta_star_x_b1),np.vstack(delta_beta_star_y_b1),np.vstack(delta_beta_star_x_b2), np.vstack(delta_beta_star_y_b2),   axis=1)    
-
-    
-    
-    
-    output_data = np.concatenate((np.vstack(triplet_errors), np.vstack(deltap_b1),\
-                                np.vstack(deltap_b2)), axis=1)                         
-
-    return input_data, output_data
-
-
-
-
-
 def load_data(set_name, noise):
     
     all_samples = np.load('./data/{}.npy'.format(set_name), allow_pickle=True)
@@ -234,15 +186,18 @@ def add_dispersion_noise(disp_errors, noise):
     return disp_errors_with_noise
 
 ### to be corrected
-def add_beta_star_noise(beta, noise):
-    beta_with_noise=beta+noise
+def add_beta_star_noise(beta_star, noise):
+    my_beta_star=np.array(beta_star)
+    noises = np.random.standard_normal(beta_star.shape)
+
+    mean = 0
+    std_dev = 0.1
+    
+    gaussian_errors = np.random.normal(mean, std_dev, len(beta))
+    beta_with_noise = beta + gaussian_errors
     return beta_with_noise
 
 
-### to be corrected 
-def add_disp_noise(disp, noise):
-    disp_with_noise=disp+noise
-    return disp_with_noise
 
 def output_example_result_tfs():
     input_data, output_data = load_data("test", 1e-3)

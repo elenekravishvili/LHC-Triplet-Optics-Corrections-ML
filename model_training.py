@@ -62,7 +62,7 @@ def main():
             #plt.hist(output_data[:,-4])
 
         if TRAIN==True:
-            n_splits=1
+            n_splits=10
             input_data = np.array_split(input_data, n_splits, axis=0)
             output_data = np.array_split(output_data, n_splits, axis=0)
 
