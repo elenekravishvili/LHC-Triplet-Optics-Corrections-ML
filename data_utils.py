@@ -189,12 +189,7 @@ def add_dispersion_noise(disp_errors, noise):
 def add_beta_star_noise(beta_star, noise):
     my_beta_star=np.array(beta_star)
     noises = np.random.standard_normal(beta_star.shape)
-
-    mean = 0
-    std_dev = 0.1
-    
-    gaussian_errors = np.random.normal(mean, std_dev, len(beta))
-    beta_with_noise = beta + gaussian_errors
+    beta_with_noise = my_beta_star+noise*noises
     return beta_with_noise
 
 
