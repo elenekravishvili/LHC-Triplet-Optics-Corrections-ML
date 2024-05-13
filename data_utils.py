@@ -13,7 +13,7 @@ Script with auxiliary functions for loading data specially, adding noise, choosi
 ----------------------------------------------------------- 0 --------------------------------------------------  """
 
 def main():        
-    data_path = "data/"
+    data_path = "data_2/"
     noise = 1E-4
     
     #output_example_result_tfs()
@@ -22,7 +22,7 @@ def main():
 
 def load_data(set_name, noise):
     
-    all_samples = np.load('./data/{}.npy'.format(set_name), allow_pickle=True)
+    all_samples = np.load('./data_2/{}.npy'.format(set_name), allow_pickle=True)
     
     delta_beta_star_x_b1, delta_beta_star_y_b1, delta_beta_star_x_b2, \
         delta_beta_star_y_b2, delta_mux_b1, delta_muy_b1, delta_mux_b2, \
@@ -69,9 +69,24 @@ def load_data(set_name, noise):
     delta_mux_b2 = [add_phase_noise(delta_mu, beta_bpm, noise) for delta_mu, beta_bpm in zip(delta_mux_b2, beta_bpm_x_b2)]
     delta_muy_b2 = [add_phase_noise(delta_mu, beta_bpm, noise) for delta_mu, beta_bpm in zip(delta_muy_b2, beta_bpm_y_b2)]
 
-    input_data = np.concatenate( (np.vstack(delta_mux_b1), np.vstack(delta_muy_b1), \
-        np.vstack(delta_mux_b2), np.vstack(delta_muy_b2)), axis=1)    
+
+    delta_beta_star_x_b1_with_noise = add_beta_star_noise(delta_beta_star_x_b1, noise)
+    delta_beta_star_y_b1_with_noise = add_beta_star_noise(delta_beta_star_y_b1, noise)
+    delta_beta_star_x_b2_with_noise = add_beta_star_noise(delta_beta_star_x_b2, noise)
+    delta_beta_star_y_b2_with_noise = add_beta_star_noise(delta_beta_star_y_b2, noise)
+
+   # input_data = np.concatenate( (np.vstack(delta_beta_star_x_b1_with_noise), np.vstack(delta_beta_star_y_b1_with_noise), \
+    #    np.vstack(delta_beta_star_x_b2_with_noise), np.vstack(delta_beta_star_y_b2_with_noise),\
+     #   np.vstack(delta_mux_b1), np.vstack(delta_muy_b1), \
+      #  np.vstack(delta_mux_b2), np.vstack(delta_muy_b2)), axis=1)    
     
+    input_data = np.concatenate( (np.vstack(delta_mux_b1), np.vstack(delta_muy_b1), \
+        np.vstack(delta_mux_b2), np.vstack(delta_muy_b2)), axis=1)  
+    
+    output_data = np.vstack(triplet_errors)
+    return input_data, output_data
+
+
     #input_data = np.concatenate((np.vstack(delta_beta_star_x_b1), np.vstack(delta_beta_star_y_b1), \
     #    np.vstack(delta_beta_star_x_b2), np.vstack(delta_beta_star_y_b2), \
     #    np.vstack(delta_mux_b1), np.vstack(delta_muy_b1), \
@@ -80,15 +95,12 @@ def load_data(set_name, noise):
     #    ), axis=1)
 
     # select targets for output
+
     
-    output_data = np.vstack(triplet_errors)
-    
-    #output_data = np.concatenate((np.vstack(triplet_errors), np.vstack(arc_errors_b1),\
+    #output_data = np.concatenate((
+    # np.vstack(triplet_errors), np.vstack(arc_errors_b1),\
     #                            np.vstack(arc_errors_b2), np.vstack(mqt_knob_errors_b1), \
     #                            np.vstack(mqt_knob_errors_b2), np.vstack(misalign_errors)), axis=1)                         
-
-    return input_data, output_data
-
 
 def merge_data(data_path, noise):
     #Takes folder path for all different data files and merges them
@@ -185,11 +197,14 @@ def add_dispersion_noise(disp_errors, noise):
     
     return disp_errors_with_noise
 
-### to be corrected
 def add_beta_star_noise(beta_star, noise):
-    my_beta_star=np.array(beta_star)
+    my_beta_star = np.array(beta_star)
     noises = np.random.standard_normal(beta_star.shape)
-    beta_with_noise = my_beta_star+noise*noises
+    # Truncate noise within 5 sigma
+    max_val = 5 * noise
+    min_val = -5 * noise
+    clipped_noises = np.clip(noises, min_val, max_val)
+    beta_with_noise = my_beta_star + noise * clipped_noises
     return beta_with_noise
 
 
