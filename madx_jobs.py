@@ -9,7 +9,6 @@ could be used instead
 
 class madx_ml_op(cpymad.madx.Madx):
     '''Normal cpymad wrapper with extra methods for this exact project'''
-
     def job_nominal2024(self):
         print(self)
         self.input('''
@@ -272,10 +271,49 @@ class madx_ml_op(cpymad.madx.Madx):
         select, flag=twiss, clear;
         select, flag=twiss, pattern="^BPM.*B1$", column=name, s, betx, bety, ndx,
                                                     mux, muy;
-        twiss, chrom, sequence=LHCB1, deltap=0.00013, file="";
+        twiss, chrom, sequence=LHCB1, deltap=0.0, file="";
         !./magnet_errors/b1_twiss_%(INDEX)s.tfs
         ! esave, file="./errors.tfs";
         ''')
+
+    def job_energyoffset_b1(self, seed):
+        self.input('''
+            EOPTION, SEED = %(SEED)s;
+            GCUTR = 3; ! Cut for truncated gaussians (sigmas)
+            err = RANF() *  TGAUSS(GCUTR);
+            dpp_offset=0.0001*err;
+                   
+
+            ! twiss, chrom, sequence=LHCB1, deltap=dpp_offset, file="twiss_off.tfs";
+            exec, do_twiss_elements(LHCB1, "twiss_off.tfs", dpp_offset);
+            ! etable, table="cetab";    
+                         
+            correct,mode=svd;  
+            
+            ! twiss, chrom, sequence=LHCB1, deltap=dpp_offset, file="twiss_corrected.tfs";
+            exec, do_twiss_elements(LHCB1, "twiss_corrected.tfs", dpp_offset);            
+                        
+            match_tunes_dpp(nqx, nqy, beam_number): macro = {
+                exec, find_complete_tunes(nqx, nqy, beam_number);
+                exec, match_tunes_op_dpp(total_qx, total_qy, beam_number);
+            };
+
+            match_tunes_op_dpp(nqx, nqy, beam_number): macro = {
+                match, deltap=dpp_offset;
+                vary, name=dQx.bbeam_number_op;
+                vary, name=dQy.bbeam_number_op;
+                constraint, range=#E, mux=nqx, muy=nqy;
+                lmdif;
+                endmatch;
+            };
+            
+            exec, match_tunes_dpp(62.28, 60.31, 1);
+            ! twiss, chrom, sequence=LHCB1, deltap=dpp_offset, file="twiss_final.tfs";
+            exec, do_twiss_elements(LHCB1, "twiss_final.tfs", dpp_offset);
+            
+
+            ! twiss, chrom;                                    
+        '''% {"SEED": seed})
 
     def job_magneterrors_b2(self, OPTICS, index, seed):
         self.input('''
@@ -384,9 +422,45 @@ class madx_ml_op(cpymad.madx.Madx):
         select, flag=twiss, clear;
         select, flag=twiss, pattern="^BPM.*B2$", column=name, s, betx, bety, ndx,
                                                     mux, muy;
-        twiss, chrom, sequence=LHCB2, deltap=0.00023, file="";
+        twiss, chrom, sequence=LHCB2, deltap=0.0, file="";
         esave, file="./errors.tfs";
 
         ''')
+    def job_energyoffset_b2(self, seed):
+        self.input('''
+            EOPTION, SEED = %(SEED)s;
+            GCUTR = 3; ! Cut for truncated gaussians (sigmas)
+            err = RANF() * TGAUSS(GCUTR);
+            dpp_offset=0.0001*err;
+       
+            ! twiss, chrom, sequence=LHCB2, deltap=dpp_offset file="";
+            exec, do_twiss_elements(LHCB2, "twiss_off_b2.tfs", dpp_offset);
+            ! etable, table="cetab";    
+                         
+            correct,mode=svd;  
+            
+            ! twiss, chrom, sequence=LHCB2, deltap=dpp_offset file="";
+            exec, do_twiss_elements(LHCB2, "twiss_corrected_b2.tfs", dpp_offset);            
+                        
+            match_tunes_dpp(nqx, nqy, beam_number): macro = {
+                exec, find_complete_tunes(nqx, nqy, beam_number);
+                exec, match_tunes_op_dpp(total_qx, total_qy, beam_number);
+            };
+
+            match_tunes_op_dpp(nqx, nqy, beam_number): macro = {
+                match, deltap=dpp_offset;
+                vary, name=dQx.bbeam_number_op;
+                vary, name=dQy.bbeam_number_op;
+                constraint, range=#E, mux=nqx, muy=nqy;
+                lmdif;
+                endmatch;
+            };
+            
+            exec, match_tunes_dpp(62.28, 60.31, 2);
+            ! twiss, chrom, sequence=LHCB2, deltap=dpp_offset file="";
+            exec, do_twiss_elements(LHCB2, "twiss_final_b2.tfs", dpp_offset);
+            
+            ! twiss, chrom;                                    
+        '''% {"SEED": seed})
 
 # %%

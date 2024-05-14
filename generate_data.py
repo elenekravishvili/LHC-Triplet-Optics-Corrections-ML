@@ -42,7 +42,7 @@ def main():
 
     start = time.time()
     set_name = f"100%triplet_ip1_20%ip5_{np.random.randint(0, 99999)}"
-    num_sim = 3
+    num_sim = 5
     valid_samples = []
     GENERATE_DATA = True
 
@@ -57,7 +57,7 @@ def main():
             if sample is not None:
                 valid_samples.append(sample)
         print("Number of generated samples: {}".format(len(valid_samples)))
-        np.save('./data_tripleterrors/{}.npy'.format(set_name), np.array(valid_samples, dtype=object))
+        np.save('./data_include_offset/{}.npy'.format(set_name), np.array(valid_samples, dtype=object))
     stop = time.time()
     print('Execution time (s): ', stop-start)
 
@@ -68,6 +68,8 @@ def create_sample(index):
 
     np.random.seed(seed=None)
     seed = random.randint(0, 999999999)
+    seed_off_1 = random.randint(0, 999999999)
+    seed_off_2 = random.randint(0, 999999999)
     mdx = madx_ml_op(stdout=False)
 
     # Run mad-x for b1 and b2
@@ -80,7 +82,12 @@ def create_sample(index):
         b1_tw_after_match = mdx.table.twiss.dframe()# Twiss after match
         common_errors = mdx.table.cetab.dframe() # Errors for both beams, triplet errors
         b1_errors = mdx.table.etabb1.dframe() # Table error for MQ- magnets
-        b1_summ=mdx.table.summ.dframe()
+
+        mdx.job_energyoffset_b1(seed_off_1)
+        b1_final=mdx.table.twiss.dframe()
+        
+        dpp1 = mdx.table.summ.deltap
+        
         #tfs.writer.write_tfs(tfs_file_path=f"b1_correct_example.tfs", data_frame=b1_errors)
         #tfs.writer.write_tfs(tfs_file_path=f"b1_common_errors.tfs", data_frame=common_errors)
         #tfs.writer.write_tfs(tfs_file_path=f"b1_example_twiss.tfs", data_frame=b1_tw_after_match)
@@ -95,15 +102,19 @@ def create_sample(index):
         b2_tw_after_match = mdx.table.twiss.dframe()# Twiss after match
         #twiss_data_b2 = mdx.table.twiss.dframe() # Relevant to training Twiss data
         b2_errors= mdx.table.etabb2.dframe() # Table error for MQX magnets
-        b2_summ=mdx.table.summ.dframe()
+
+        mdx.job_energyoffset_b2(seed_off_2)
+        b2_final=mdx.table.twiss.dframe()
+        
+        dpp2 = mdx.table.summ.deltap
 
         delta_beta_star_x_b1, delta_beta_star_y_b1, \
-        delta_mux_b1, delta_muy_b1, n_disp_b1, \
-            beta_bpm_x_b1, beta_bpm_y_b1 = get_input_for_beam(b1_tw_after_match,  B1_MONITORS_MDL_TFS, 1)
+        delta_mux_b1, delta_muy_b1,\
+            beta_bpm_x_b1, beta_bpm_y_b1 = get_input_for_beam(b1_final,  B1_MONITORS_MDL_TFS, 1)
         
         delta_beta_star_x_b2, delta_beta_star_y_b2, \
-            delta_mux_b2, delta_muy_b2, n_disp_b2, \
-            beta_bpm_x_b2, beta_bpm_y_b2  = get_input_for_beam(b2_tw_after_match , B2_MONITORS_MDL_TFS, 2)
+            delta_mux_b2, delta_muy_b2,\
+            beta_bpm_x_b2, beta_bpm_y_b2  = get_input_for_beam(b2_final , B2_MONITORS_MDL_TFS, 2)
 
         # Reading errors from MADX tables
         triplet_errors, arc_errors_b1, arc_errors_b2, mqt_errors_b1, mqt_errors_b2,\
@@ -112,12 +123,17 @@ def create_sample(index):
                 b1_tw_before_match, b1_tw_after_match, b2_tw_before_match, b2_tw_after_match)
         
         # Create a training sample
-        sample = delta_beta_star_x_b1, delta_beta_star_y_b1, delta_beta_star_x_b2, delta_beta_star_y_b2, \
-            delta_mux_b1, delta_muy_b1, delta_mux_b2, delta_muy_b2, n_disp_b1, n_disp_b2, \
-            beta_bpm_x_b1, beta_bpm_y_b1, beta_bpm_x_b2, beta_bpm_y_b2, \
-            triplet_errors #, arc_errors_b1, arc_errors_b2, mqt_errors_b1,\
+        #sample = delta_beta_star_x_b1, delta_beta_star_y_b1, delta_beta_star_x_b2, delta_beta_star_y_b2, \
+         #   delta_mux_b1, delta_muy_b1, delta_mux_b2, delta_muy_b2, n_disp_b1, n_disp_b2, \
+          #  beta_bpm_x_b1, beta_bpm_y_b1, beta_bpm_x_b2, beta_bpm_y_b2, \
+           # triplet_errors #, arc_errors_b1, arc_errors_b2, mqt_errors_b1,\
             #mqt_errors_b2, mqt_knob_errors_b1, mqt_knob_errors_b2, misalign_errors
 
+
+        sample = delta_beta_star_x_b1, delta_beta_star_y_b1, delta_beta_star_x_b2, delta_beta_star_y_b2, \
+            delta_mux_b1, delta_muy_b1, delta_mux_b2, delta_muy_b2, \
+            beta_bpm_x_b1, beta_bpm_y_b1, beta_bpm_x_b2, beta_bpm_y_b2, \
+            triplet_errors, dpp1, dpp2
         
         # Sometimes matching fails, this is a half measure        
         if len(mqt_knob_errors_b1) != 2 or len(mqt_knob_errors_b2) != 2:
@@ -223,7 +239,7 @@ def get_input_for_beam(twiss_df, meas_mdl, beam):
     delta_beta_star_y = np.array(tw_perturbed.loc[ip_bpms, "BETY"] - meas_mdl.loc[ip_bpms, "BETY"])/meas_mdl.loc[ip_bpms, "BETY"]
 
     #normalized dispersion deviation
-    n_disp = tw_perturbed['NDX']
+    # n_disp = tw_perturbed['NDX']
     
     # Adding betas at bpms for phase advance measurement in order to compute the noise
 
@@ -233,8 +249,12 @@ def get_input_for_beam(twiss_df, meas_mdl, beam):
     #print("Beta Beat", meas_mdl, tw_perturbed)
     #plot_example_betabeat(meas_mdl, tw_perturbed, beam)
     
+    #return np.array(delta_beta_star_x), np.array(delta_beta_star_y), \
+     #   np.array(delta_phase_adv_x), np.array(delta_phase_adv_y), np.array(n_disp),\
+       # np.array(beta_bpms_x), np.array(beta_bpms_y)
+
     return np.array(delta_beta_star_x), np.array(delta_beta_star_y), \
-        np.array(delta_phase_adv_x), np.array(delta_phase_adv_y), np.array(n_disp),\
+        np.array(delta_phase_adv_x), np.array(delta_phase_adv_y), \
         np.array(beta_bpms_x), np.array(beta_bpms_y)
 
 
