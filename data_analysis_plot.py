@@ -1,9 +1,10 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import tfs
-import pandas as pn
+import pandas as pd
 from pathlib import Path
 from joblib import load
+from cpymad import madx
 
 
 
@@ -23,21 +24,29 @@ def merge_data(data_path, noise):
 
 def load_data(set_name, noise):
     
-    all_samples = np.load('./data_2/{}.npy'.format(set_name), allow_pickle=True)
+    all_samples = np.load('./data_include_offset/{}.npy'.format(set_name), allow_pickle=True)
 
+    #delta_beta_star_x_b1, delta_beta_star_y_b1, delta_beta_star_x_b2, \
+     #   delta_beta_star_y_b2, delta_mux_b1, delta_muy_b1, delta_mux_b2, \
+      #      delta_muy_b2,b1_disp, b2_disp,\
+       #     beta_bpm_x_b1, beta_bpm_y_b1, beta_bpm_x_b2, beta_bpm_y_b2, \
+        #    triplet_errors = all_samples.T
     delta_beta_star_x_b1, delta_beta_star_y_b1, delta_beta_star_x_b2, \
         delta_beta_star_y_b2, delta_mux_b1, delta_muy_b1, delta_mux_b2, \
-            delta_muy_b2, n_disp_b1, n_disp_b2,\
+            delta_muy_b2,\
             beta_bpm_x_b1, beta_bpm_y_b1, beta_bpm_x_b2, beta_bpm_y_b2, \
-            triplet_errors = all_samples.T
+            triplet_errors, dpp_1, dpp_2 = all_samples.T
     
     input_data = np.concatenate( (np.vstack(delta_beta_star_x_b1), np.vstack(delta_beta_star_y_b1), \
             np.vstack(delta_beta_star_x_b2), np.vstack(delta_beta_star_y_b2), \
-            np.vstack(delta_mux_b1), np.vstack(delta_muy_b1), \
+           np.vstack(delta_mux_b1), np.vstack(delta_muy_b1), \
             np.vstack(delta_mux_b2), np.vstack(delta_muy_b2)), axis=1)    
+    #input_data = np.concatenate( (np.vstack(delta_mux_b1), np.vstack(delta_muy_b1), \
+     #      np.vstack(delta_mux_b2), np.vstack(delta_muy_b2)), axis=1)    
     
-    output_data = np.vstack(triplet_errors)
-                
+    output_data = np.concatenate( (np.vstack(triplet_errors), np.vstack(dpp_1), np.vstack(dpp_2)), axis=1)
+    #output_data =  np.vstack(triplet_errors)
+
     return input_data, output_data
 
 
@@ -128,10 +137,11 @@ def normalize(data):
 
 
 
-def obtain_triplet_errors(input_data, output_data, estimator):
+def obtain_triplet_errors(input_data, output_data_all, estimator):
     # Function that gives the predicted and real values of errors for a numpy array inputs
-    pred_data = estimator.predict(input_data)
-   
+    pred_data_all = estimator.predict(input_data)
+    pred_data = pred_data_all[:, :32]
+    output_data = output_data_all[:, :32]
     pred_data = normalize(pred_data)
     output_data = normalize(output_data)
 
@@ -144,10 +154,10 @@ def obtain_triplet_errors(input_data, output_data, estimator):
 def triplet_error_dist_plot(input_data, output_data, estimator):
     pred_triplet, true_triplet= obtain_triplet_errors(input_data, output_data, estimator)
     residue=true_triplet-pred_triplet
-    plt.hist(pred_triplet, bins=20, color='blue', alpha=0.5, label='predicted')
-    plt.hist(true_triplet, bins=20, color='red', alpha=0.5, label='true')
-    plt.hist(residue, bins=20, color='green', alpha=0.5, label='residuals')
-    plt.xlabel('Normalized Data')
+    plt.hist(pred_triplet, bins=15, color='blue', alpha=0.5, label='predicted')
+    plt.hist(true_triplet, bins=15, color='red', alpha=0.5, label='true')
+    plt.hist(residue, bins=15, color='green', alpha=0.5, label='residuals')
+    plt.xlabel('Normalized triplet errors')
     plt.ylabel('Counts')
     plt.title('Histogram of Normalized Data')
     plt.legend()  # Add legend to display labels
@@ -156,57 +166,85 @@ def triplet_error_dist_plot(input_data, output_data, estimator):
 
 
 
-data_path = "data_2/"
+
+
+def save_np_errors_tfs(np_errors):
+    TRIPLET_NAMES = ["MQXA.3L2", "MQXB.B2L2", "MQXB.A2L2", "MQXA.1L2",  "MQXA.1R2", "MQXB.A2R2",  "MQXB.B2R2" , "MQXA.3R2", \
+                        "MQXA.3L5" , "MQXB.B2L5", "MQXB.A2L5", "MQXA.1L5",  "MQXA.1R5", "MQXB.A2R5",  "MQXB.B2R5" , "MQXA.3R5",\
+                        "MQXA.3L8" , "MQXB.B2L8", "MQXB.A2L8", "MQXA.1L8",  "MQXA.1R8", "MQXB.A2R8",  "MQXB.B2R8" , "MQXA.3R8",\
+                        "MQXA.3L1" , "MQXB.B2L1", "MQXB.A2L1", "MQXA.1L1",  "MQXA.1R1", "MQXB.A2R1",  "MQXB.B2R1" , "MQXA.3R1"]
+
+    #This is the tfs format that can be read, this model of file is then copied and filled
+    #error_tfs_model_b1 = tfs.read_tfs("./data_analysis/errors_b1.tfs")
+    #error_tfs_model_b2 = tfs.read_tfs("./data_analysis/errors_b2.tfs")
+
+    #Function that takes np errors and outputs .tfs file with all error values
+    #with open("./data_analysis/mq_names_best_know.txt", "r") as f:
+     #   lines = f.readlines()
+      #  names = [name.replace("\n", "") for name in lines]
+
+    #names = names[:32] # If we only predict triplets
+    names = TRIPLET_NAMES
+
+    # Recons_df is a dataframe with the correct names and errors but not format
+    recons_df = pd.DataFrame(columns=["NAME","K1L"])
+    recons_df.K1L = np_errors #[:-32] This is if we try to predict misalignment
+    #ds_errors = np_errors[-32:]
+    #recons_df.DS = [0 if i>=32 else ds_errors[i] for i, name in enumerate(names)]
+    recons_df.NAME = names
+
+    #for beam, error_tfs_model in enumerate([error_tfs_model_b1, error_tfs_model_b2]):
+     #   for i in range(len(error_tfs_model)):
+      #      # check if the name is in recons_df
+     #       if error_tfs_model.loc[i, 'NAME'] in list(recons_df['NAME']):
+       #         error_tfs_model.loc[i, 'K1L'] = recons_df.loc[recons_df['NAME'] == error_tfs_model.loc[i, 'NAME']].values[0][1]
+        #        #error_tfs_model.loc[i, 'DS'] = recons_df.loc[recons_df['NAME'] == error_tfs_model.loc[i, 'NAME']].values[0][2]
+            
+    #tfs.writer.write_tfs(tfs_file_path=f"./data_analysis/b1_{filename}", data_frame=error_tfs_model_b1)
+    tfs.write("./data_analysis/errors_1.tfs", recons_df)
+    return recons_df
+
+#x = tfs.read("/afs/cern.ch/user/a/aborjess/work/public/ML-Optic-Correction/src/twiss_reconstruction/data_analysis/b1_pred_best_know_err.tfs")
+
+#tfs.write("example.tfs", x)
+
+
+#mdx = madx_ml_op(stdout=False)
+OPTICS_30CM_2024 = '/afs/cern.ch/eng/acc-models/lhc/2024/operation/optics/R2024aRP_A30cmC30cmA10mL200cm.madx'
+data_path = "data_phase_adv_triplet"
+data_path_with_off = "data_include_offset"
 noise = 1E-4
 Nth_array=68
-#output_example_result_tfs()
-input_data, output_data = merge_data(data_path, noise)
+loaded_estimator_with_off = load('./estimators/test_2_triplet_phases_028_ridge_0.0001.pkl')
+loaded_estimator = load('./estimators/triplet_phases_only_028_ridge_0.001.pkl')
+
+input_data, output_data = merge_data(data_path_with_off, noise)
+#triplet_error_dist_plot(input_data, output_data, loaded_estimator)
 
 
-# Load the saved model
-loaded_estimator = load('./estimators/with_betastartriplet_phases_only_028_ridge_0.0001.pkl')
+predicted_data = loaded_estimator_with_off.predict(input_data)
 
 
-triplet_error_dist_plot(input_data, output_data, loaded_estimator)
+pred_triples = predicted_data[:, :32]
+real_triplet = output_data [:,:32]
+real_energy_off = output_data [:, -2:]
+energy_off_pred = np.hstack(predicted_data[:, -2:])
+energy_off_real = np.hstack(real_energy_off)
+print(pred_triples.shape)
 
-# Convert the list of arrays to a single 2D array
-#normalized_true_data = np.array(normalized_predicted_data)
+res = energy_off_real-energy_off_pred
 
-
-
-
-#normalized_data=[]
-#for i in range(len(predictions)):
-#    normalized_data.append(predictions[i] / nom_k1)
-
-#dif=predicted_output-real_output
-#diff=dif.flatten()
-
-#x_coordinates = np.arange(len(real_output))
-
-
-
-"""
-# Plotting the histogram
-plt.figure(figsize=(12, 6))
-
-# Plot the real values
-#plt.bar(x_coordinates, real_output, color='blue', alpha=0.5, label='Real')
-
-# Plot the predicted values
-#plt.bar(x_coordinates, predicted_output, color='red', alpha=0.5, label='Predicted')
-
-# Plot the differences
-plt.bar(x_coordinates, diff, color='green', alpha=0.5, label='Difference')
-
-plt.title('Histogram of Real Values, Predicted Values, and Differences')
-plt.xlabel('Data Point Index')
-plt.ylabel('Value')
-plt.legend()
+plt.hist(energy_off_pred, bins=20, color='blue', alpha=0.5, label='predicted', histtype=u'step')
+plt.hist(energy_off_real, bins=20, color='red', alpha=0.5, label='true', histtype=u'step')
+plt.hist(res, bins=20, color='green', alpha=0.5, label='residuals', histtype=u'step')
+plt.xlabel('Energy offser')
+plt.ylabel('Counts')
+plt.title('Histogram of Energy offset')
+plt.legend()  # Add legend to display labels
 plt.grid(True)
 plt.show()
 
-"""
+
 
 """
 tw_nominal=tfs.read("twiss_nominal.tfs")
