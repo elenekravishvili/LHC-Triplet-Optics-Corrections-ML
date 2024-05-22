@@ -126,3 +126,4 @@ def job_energyoffset_b1(self, seed):
     '''% {"SEED": seed})
 
     mdx = mdx
+    mdx = mdx
