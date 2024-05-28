@@ -79,17 +79,11 @@ def recons_twiss_with_off( beam, mdx, dpp_1, dpp_2):
                 READMYTABLE, file="/afs/cern.ch/user/e/ekravish/public/src_afs/linear/example_redefine.tfs", table=errtab;
                 SETERR, TABLE=errtab;""")
 
-    mdx.twiss(sequence=f"LHCB{beam}", file="") #Chrom deltap=0.0
-    mdx.input(f"match_tunes(62.28, 60.31, {beam});")
+    mdx.use(sequence=f"LHCB{beam}") #Chrom deltap=0.0
+    mdx.input(f"exec, match_tunes(62.28, 60.31, {beam});")
     mdx.input(f"""etable, table="final_error";""")
     
     mdx.twiss(sequence=f"LHCB{beam}", file="")    
-
-    mdx.input(f"match_tunes(62.28, 60.31, {beam});")
-    mdx.input(f"""etable, table="final_error";""")
-    
-    mdx.twiss(sequence=f"LHCB{beam}", file="")   
-
     
     mdx.input(f"""dpp_offset={dpp_1};
             exec, do_twiss_elements(LHCB1, "twiss_off.tfs", dpp_offset);
@@ -228,7 +222,7 @@ def beta_beat_dist(data_path, noise, mdx):
                 deltap_1 =off_1[i] - dpp_1_array[i]
                 deltap_2 = off_2[i] - dpp_2_array[i]
 
-                tw_recons_first = recons_twiss_with_off(1, mdx, deltap_1, deltap_2)
+                tw_recons_first = recons_twiss_with_off(1, mdx, deltap_1[0], deltap_2[0])
                 tw_recons = make_twiss_good(tw_recons_first)
             
                 betax = np.array(tw_recons.BETX)
@@ -328,7 +322,58 @@ dpp_1_array = np.array(dpp_1)
 dpp_2_array = np.array(dpp_2)
 pred_triplet_err_array = np.array(pred_triplet_err)
 
-beta_beat_dist(data_path, noise, mdx)
+#beta_beat_dist(data_path, noise, mdx)
 
 #x = recons_twiss_with_off(1, mdx, 0.0005, 0.00034)
 #print(x)
+all_samples = np.load('./data_include_offset/100%triplet_ip1_20%ip5_6575.npy', allow_pickle=True)
+
+delta_beta_star_x_b1, delta_beta_star_y_b1, delta_beta_star_x_b2, \
+    delta_beta_star_y_b2, delta_mux_b1, delta_muy_b1, delta_mux_b2, \
+        delta_muy_b2,\
+        beta_bpm_x_b1, beta_bpm_y_b1, beta_bpm_x_b2, beta_bpm_y_b2, \
+        triplet_errors, dpp_1, dpp_2 = all_samples.T
+
+input_data = np.concatenate( (np.vstack(delta_beta_star_x_b1), np.vstack(delta_beta_star_y_b1), \
+        np.vstack(delta_beta_star_x_b2), np.vstack(delta_beta_star_y_b2), \
+        np.vstack(delta_mux_b1), np.vstack(delta_muy_b1), \
+        np.vstack(delta_mux_b2), np.vstack(delta_muy_b2)), axis=1)   
+
+#output_data = np.concatenate( (np.vstack(triplet_errors), np.vstack(dpp_1), np.vstack(dpp_2)), axis=1)
+output_data = np.vstack(triplet_errors)
+# betas = beta_bpm_x_b1, beta_bpm_y_b1, beta_bpm_x_b2, beta_bpm_y_b2
+beta_x_b1, beta_y_b1, beta_x_b2, beta_y_b2, input_data, output_data, off_1, off_2 = np.vstack(beta_bpm_x_b1), np.vstack(beta_bpm_y_b1), np.vstack(beta_bpm_x_b2), np.vstack(beta_bpm_y_b2),\
+     input_data, output_data, dpp_1, dpp_2
+#print(dpp_1)
+#print(dpp_1_array)
+B1_ELEMENTS_MDL_TFS = tfs.read_tfs("./nominal_twiss/b1_nominal_monitors.dat").set_index("NAME")
+B1_ELEMENTS_MDL_TFS_rec = tfs.read_tfs("reconst_nom_twiss.tfs")
+tw_nom_rec = make_twiss_good(B1_ELEMENTS_MDL_TFS_rec)
+beta_x_b1_nom_rec =np.array(tw_nom_rec.BETX)
+beta_x_b1_nom =np.array(B1_ELEMENTS_MDL_TFS["BETX"])
+beta_beat_x_b1, beta_beat_y_b1, beta_beat_x_b2, beta_beat_y_b2 = [], [], [], []
+rms_x_b1, rms_y_b1, rms_x_b2, rms_y_b2  = [], [], [], []
+rms_x_b1_pred, rms_y_b1_pred, rms_x_b2_pred, rms_y_b2_pred  = [], [], [], []
+number = 0
+
+
+
+
+
+corrected_errors = output_data[1]-pred_triplet_err_array[1]
+save_np_errors_tfs(corrected_errors[0])
+save_errors_rel_formal()
+
+deltap_1 =off_1[1] - dpp_1_array[1]
+deltap_2 = off_2[1] - dpp_2_array[1]
+
+tw_recons_first = recons_twiss_with_off(1, mdx, deltap_1[0], 0.0001 )
+tw_recons = make_twiss_good(tw_recons_first)
+
+#print(tw_recons)
+
+print(deltap_1[0])
+
+
+
+
