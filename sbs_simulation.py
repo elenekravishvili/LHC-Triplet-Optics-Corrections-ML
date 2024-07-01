@@ -4,7 +4,10 @@ import tfs
 import numpy as np
 from pathlib import Path
 from joblib import load
+import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
+from data_utils import add_phase_noise
+from data_utils import load_data
 #mdx = madx_ml_op(stdout=False)
 
 # Create an instance of your class
@@ -22,32 +25,23 @@ from sklearn.ensemble import RandomForestRegressor
 #mux = twiss.MUX
 #mux_mod = twiss_modif.MUX
 #print(twiss.BETX-twiss_modif.BETX)
+def merge_data(data_path, noise):
+    #Takes folder path for all different data files and merges them
+    input_data, output_data = [], []
+    pathlist = Path(data_path).glob('**/*.npy')
+    file_names = [str(path).split('/')[-1][:-4] for path in pathlist]
+
+    for file_name in file_names:
+        aux_input, aux_output = load_data(file_name, noise)
+        input_data.append(aux_input)
+        output_data.append(aux_output)
+
+    return np.concatenate(input_data), np.concatenate(output_data)
 
 
 
-def load_data_mod(set_name, noise):
-    
-    all_samples = np.load('./data_phase_adv_triplet/{}.npy'.format(set_name), allow_pickle=True)
 
-    delta_beta_star_x_b1, delta_beta_star_y_b1, delta_beta_star_x_b2, \
-        delta_beta_star_y_b2, delta_mux_b1, delta_muy_b1, delta_mux_b2, \
-            delta_muy_b2,b1_disp, b2_disp,\
-            beta_bpm_x_b1, beta_bpm_y_b1, beta_bpm_x_b2, beta_bpm_y_b2, \
-            triplet_errors = all_samples.T
-    
-    input_data = np.concatenate( (np.vstack(delta_mux_b1), np.vstack(delta_muy_b1), \
-           np.vstack(delta_mux_b2), np.vstack(delta_muy_b2)), axis=1)    
-    #input_data = np.concatenate( (np.vstack(delta_beta_star_x_b1), np.vstack(delta_beta_star_y_b1), \
-     #   np.vstack(delta_beta_star_x_b2), np.vstack(delta_beta_star_y_b2), \
-      #  np.vstack(delta_mux_b1), np.vstack(delta_muy_b1), \
-       # np.vstack(delta_mux_b2), np.vstack(delta_muy_b2)), axis=1)  
-    
-    output_data =  np.vstack(triplet_errors)
-    # betas = beta_bpm_x_b1, beta_bpm_y_b1, beta_bpm_x_b2, beta_bpm_y_b2
-
-    return  input_data, output_data
-
-def rms_mu_dist(data_path, noise, estimator, mdx, beam, IP):
+def rms_mu_dist(data_path, noise, estimator, mdx, beam, IP, alpha):
     #Takes folder path for all different data files and merges them
     input_data, output_data, beta  = [], [], []
     pathlist = Path(data_path).glob('**/*.npy')
@@ -58,12 +52,12 @@ def rms_mu_dist(data_path, noise, estimator, mdx, beam, IP):
     rms_mu_x, rms_mu_y  = [], []
     rms_mu_x_all, rms_mu_y_all = [], []
     for file_name in file_names:
-        input_data, output_data = load_data_mod(file_name, noise)
+        input_data, output_data = load_data(file_name, noise)
     
-        for i in range(10):
+        for i in range(1):
             try:
                 predicted_data = estimator.predict([input_data[i]])
-                corrected_errors = output_data[i]-predicted_data
+                corrected_errors = output_data[i] -predicted_data
                 err1_1, err2_1, err3_1, err4_1, err5_1, err6_1, err7_1, err8_1  = corrected_errors[0][-8:]
                 mdx.job_sbs(beam, 1, err1_1, err2_1, err3_1, err4_1, err5_1, err6_1, err7_1, err8_1 )
                 twiss = tfs.read("twiss_IP1.dat")
@@ -73,11 +67,13 @@ def rms_mu_dist(data_path, noise, estimator, mdx, beam, IP):
                 muy = twiss.MUY
                 muy_mod = twiss_modif.MUY
 
-                mu_x = (mux_mod-mux)/mux
+                mu_x = mux_mod-mux
                 rms_mu_x = np.sqrt(np.mean(mu_x**2, axis=0))
                 rms_mu_x_all.append(rms_mu_x)
-
-                mu_y = (muy_mod-muy)/muy
+                
+                print(mu_x) 
+                
+                mu_y = muy_mod-muy
                 rms_mu_y = np.sqrt(np.mean(mu_y**2, axis=0))
                 rms_mu_y_all.append(rms_mu_y)
                 
@@ -85,32 +81,36 @@ def rms_mu_dist(data_path, noise, estimator, mdx, beam, IP):
                 # Code to handle the exception
                 print(f"An error occurred with {i}: {e}")
 
-    rms_mux = np.hstack(rms_mu_x_all)
-    tfs.write("rms_mux_noise_0.0001.tfs", rms_mux)
-    rms_muy = np.hstack(rms_mu_y_all)
-    tfs.write("rms_muy_noise_0.0001.tfs", rms_muy)
+    rms_mux_df = pd.DataFrame({'rms_mux': rms_mu_x_all})
+    rms_muy_df = pd.DataFrame({'rms_muy': rms_mu_y_all})
+    print("Hello")
+    # Save using tfs.write
+    tfs.write("./rms_mu_changing_parameters/rms_mux_noise_{}_alpha{}.tfs".format(noise, alpha), rms_mux_df)
+    tfs.write("./rms_mu_changing_parameters/rms_muy_noise_{}_alpha{}.tfs".format(noise, alpha), rms_muy_df)
 
-    bin_edges = np.linspace(0, 1, 16)
     
-    plt.hist(rms_mux, bins=bin_edges, color='green', alpha=0.5, label='rms of mux')
-    plt.hist(rms_mu_y, bins=bin_edges, color='blue', alpha=0.5, label='rms of muy')
-    plt.xlabel('rms')
-    plt.ylabel('Counts')
-    plt.title('rms')
-    plt.legend()  # Add legend to display labels
-    plt.grid(True)
-    #plt.savefig("beta_beat_recons_b1x.pdf")
-    plt.show()
+
 
 
 
     
 data_path = "data_phase_adv_triplet"
-noise = 1E-4
+noise = 2E-4
+alpha = 4E-4
 Nth_array=68
 mdx = madx_ml_op()
-loaded_estimator_001 = load('./estimators/triplet_phases_only_028_ridge_0.001.pkl')
-loaded_estimator_0001 = load('./estimators/triplet_phases_028_ridge_0.0001.pkl')
-loaded_estimator_01 = load('./estimators/triplet_phases_only_028_ridge_0.01.pkl')
+#loaded_estimator_001 = load('./estimators/triplet_phases_only_028_ridge_0.001.pkl')
+#estimator_noise_0002_alpha001 = load('./estimators/test_for_new_data_with_betastar_triplet_phases_028_ridge_0.0002_alpha(1e-3).pkl')
+estimator_noise_0002_alpha0002 = load('./estimators_for_parameters/test_for_new_data_with_betastar_triplet_phases_028_ridge_0.0002_alpha(2e-4).pkl')
+#estimator_noise_0002_alpha0004 = load('./estimators/test_for_new_data_with_betastar_triplet_phases_028_ridge_0.0002_alpha(4e-4).pkl')
+#estimator_noise_0002_alpha0006 = load('./estimators/test_for_new_data_with_betastar_triplet_phases_028_ridge_0.0002_alpha(6e-4).pkl')
+#estimator_noise_0002_alpha0008 = load('./estimators/test_for_new_data_with_betastar_triplet_phases_028_ridge_0.0002_alpha(8e-4).pkl')
 
-rms_mu_dist(data_path, noise, loaded_estimator_0001, mdx, 1, 1)
+estimator_noise_0002_alpha0004 = load('./estimators_for_parameters/test_for_new_data_with_betastar_triplet_phases_028_ridge_0.0002_alpha(4e-4).pkl')
+rms_mu_dist(data_path, noise, estimator_noise_0002_alpha0004, mdx, 1, 1, alpha)
+
+
+
+
+
+
