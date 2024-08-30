@@ -6,7 +6,10 @@ import os
 from pathlib import Path
 from joblib import load
 from cpymad import madx
-#from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor
+from data_utils import add_phase_noise
+from data_utils import add_beta_star_noise
+
 
 
 def merge_data(data_path, noise, estimator):
@@ -27,7 +30,7 @@ def merge_data(data_path, noise, estimator):
 
 def load_data_mod(set_name, noise):
     
-    all_samples = np.load('./data_include_offset/{}.npy'.format(set_name), allow_pickle=True)
+    all_samples = np.load('./data_include_offset/100%triplet_ip1_20%ip5_97454.npy', allow_pickle=True)
 
     delta_beta_star_x_b1, delta_beta_star_y_b1, delta_beta_star_x_b2, \
         delta_beta_star_y_b2, delta_mux_b1, delta_muy_b1, delta_mux_b2, \
@@ -35,17 +38,29 @@ def load_data_mod(set_name, noise):
             beta_bpm_x_b1, beta_bpm_y_b1, beta_bpm_x_b2, beta_bpm_y_b2, \
             triplet_errors, dpp_1, dpp_2 = all_samples.T
     
+    delta_mux_b1 = [add_phase_noise(delta_mu, beta_bpm, noise) for delta_mu, beta_bpm in zip(delta_mux_b1, beta_bpm_x_b1)]
+    delta_muy_b1 = [add_phase_noise(delta_mu, beta_bpm, noise) for delta_mu, beta_bpm in zip(delta_muy_b1, beta_bpm_y_b1)]
+    delta_mux_b2 = [add_phase_noise(delta_mu, beta_bpm, noise) for delta_mu, beta_bpm in zip(delta_mux_b2, beta_bpm_x_b2)]
+    delta_muy_b2 = [add_phase_noise(delta_mu, beta_bpm, noise) for delta_mu, beta_bpm in zip(delta_muy_b2, beta_bpm_y_b2)]
+
+    delta_beta_star_x_b1_with_noise = add_beta_star_noise(delta_beta_star_x_b1, noise)
+    delta_beta_star_y_b1_with_noise = add_beta_star_noise(delta_beta_star_y_b1, noise)
+    delta_beta_star_x_b2_with_noise = add_beta_star_noise(delta_beta_star_x_b2, noise)
+    delta_beta_star_y_b2_with_noise = add_beta_star_noise(delta_beta_star_y_b2, noise)
+    
     input_data = np.concatenate( (np.vstack(delta_beta_star_x_b1), np.vstack(delta_beta_star_y_b1), \
             np.vstack(delta_beta_star_x_b2), np.vstack(delta_beta_star_y_b2), \
             np.vstack(delta_mux_b1), np.vstack(delta_muy_b1), \
-            np.vstack(delta_mux_b2), np.vstack(delta_muy_b2)), axis=1)   
+            np.vstack(delta_mux_b2), np.vstack(delta_muy_b2)), axis=1)  
+    #input_data = np.concatenate( (np.vstack(delta_mux_b1), np.vstack(delta_muy_b1), \
+     #   np.vstack(delta_mux_b2), np.vstack(delta_muy_b2)), axis=1)    
     
-    #output_data = np.concatenate( (np.vstack(triplet_errors), np.vstack(dpp_1), np.vstack(dpp_2)), axis=1)
-    output_data = np.vstack(triplet_errors)
+    output_data = np.concatenate( (np.vstack(triplet_errors), np.vstack(dpp_1), np.vstack(dpp_2)), axis=1)
+    output_triplet = np.vstack(triplet_errors)
     # betas = beta_bpm_x_b1, beta_bpm_y_b1, beta_bpm_x_b2, beta_bpm_y_b2
 
     return np.vstack(beta_bpm_x_b1), np.vstack(beta_bpm_y_b1), np.vstack(beta_bpm_x_b2), np.vstack(beta_bpm_y_b2),\
-     input_data, output_data, dpp_1, dpp_2
+     input_data, output_triplet, dpp_1, dpp_2
 
 
 
@@ -76,10 +91,10 @@ def recons_twiss_with_off( beam, mdx, dpp_1, dpp_2):
     mdx.input(f"""
                 !readtable, file = "/afs/cern.ch/eng/sl/lintrack/error_tables/Beam{beam}/error_tables_6.5TeV/MBx-0001.errors", table=errtab;
                 !seterr, table=errtab;
-                READMYTABLE, file="/afs/cern.ch/user/e/ekravish/public/src_afs/linear/example_redefine.tfs", table=errtab;
+                READMYTABLE, file="/afs/cern.ch/user/e/ekravish/work/linear/example_redefine.tfs", table=errtab;
                 SETERR, TABLE=errtab;""")
 
-    mdx.use(sequence=f"LHCB{beam}") #Chrom deltap=0.0
+    mdx.twiss(sequence=f"LHCB{beam}") #Chrom deltap=0.0
     mdx.input(f"exec, match_tunes(62.28, 60.31, {beam});")
     mdx.input(f"""etable, table="final_error";""")
     
@@ -181,18 +196,18 @@ def save_errors_rel_formal():
     tfs.write("example_redefine.tfs", x)
 
 
-def beta_beat_dist(data_path, noise, mdx):
+def beta_beat_dist(data_path, noise, estimator,  mdx):
     #Takes folder path for all different data files and merges them
     input_data, output_data, beta  = [], [], []
     pathlist = Path(data_path).glob('**/*.npy')
     file_names = [str(path).split('/')[-1][:-4] for path in pathlist]
 
-    dpp_1 = tfs.read("./predicted_errors/pred_dpp_1.tfs")
-    dpp_2 = tfs.read("./predicted_errors/pred_dpp_2.tfs")
-    pred_triplet_err = tfs.read("./predicted_errors/pred_triplet_incl_off.tfs")
-    dpp_1_array = np.array(dpp_1)
-    dpp_2_array = np.array(dpp_2)
-    pred_triplet_err_array = np.array(pred_triplet_err)
+    #dpp_1 = tfs.read("./predicted_errors/pred_dpp_1.tfs")
+    #dpp_2 = tfs.read("./predicted_errors/pred_dpp_2.tfs")
+    #pred_triplet_err = tfs.read("./predicted_errors/pred_triplet_incl_off.tfs")
+    #dpp_1_array = np.array(dpp_1)
+    #dpp_2_array = np.array(dpp_2)
+    #pred_triplet_err_array = np.array(pred_triplet_err)
 
     B1_ELEMENTS_MDL_TFS = tfs.read_tfs("./nominal_twiss/b1_nominal_monitors.dat").set_index("NAME")
     B2_ELEMENTS_MDL_TFS = tfs.read_tfs("./nominal_twiss/b2_nominal_monitors.dat").set_index("NAME")
@@ -208,87 +223,104 @@ def beta_beat_dist(data_path, noise, mdx):
     rms_x_b1, rms_y_b1, rms_x_b2, rms_y_b2  = [], [], [], []
     rms_x_b1_pred, rms_y_b1_pred, rms_x_b2_pred, rms_y_b2_pred  = [], [], [], []
     number = 0
-    for file_name in file_names:
-        beta_x_b1, beta_y_b1, beta_x_b2, beta_y_b2, input_data, output_data, off_1, off_2 = load_data_mod(file_name, noise)
-    
-        for i in range(1):
-            try:
-                predicted_data = pred_triplet_err_array[i]
-                corrected_errors = output_data[i]-predicted_data
-                save_np_errors_tfs(corrected_errors[0])
-                save_errors_rel_formal()
+    errors = []
+    #for file_name in file_names:
+    beta_x_b1, beta_y_b1, beta_x_b2, beta_y_b2, input_data, output_triplet, off_1, off_2 = load_data_mod(1, noise)
+
+    for i in range(300):
+        try:
+            print(f'index is {i}')
+            predicted_output = estimator.predict([input_data[i]])
+
+            predicted_triplet = predicted_output[:, :32] #first 32
+
+            predicted_dpp_1 = predicted_output[:, -2] #second last
+
+            predicted_dpp_2 =  predicted_output[:, -1] #last
+
+            corrected_errors = output_triplet[i] -predicted_triplet
+            errors.append(corrected_errors)
+            save_np_errors_tfs(corrected_errors[0])
+            save_errors_rel_formal()
 
 
-                deltap_1 =off_1[i] - dpp_1_array[i]
-                deltap_2 = off_2[i] - dpp_2_array[i]
+            deltap_1 =off_1[i] - predicted_dpp_1
+            deltap_2 = off_2[i] - predicted_dpp_2
 
-                tw_recons_first = recons_twiss_with_off(1, mdx, deltap_1[0], deltap_2[0])
-                tw_recons = make_twiss_good(tw_recons_first)
+            tw_recons_first = recons_twiss_with_off(1, mdx, deltap_1[0], deltap_2[0])
+            tw_recons = make_twiss_good(tw_recons_first)
+        
+            betax = np.array(tw_recons.BETX)
+            betay = np.array(tw_recons.BETY)
+
+            beta_beating_x = (betax-beta_x_b1_nom_rec)/beta_x_b1_nom_rec
+            rms_x1_pred = np.sqrt(np.mean(beta_beating_x**2, axis=0))
+            rms_x_b1_pred.append(rms_x1_pred)
+
+            beta_beating_y = (betay-beta_y_b1_nom_rec)/beta_y_b1_nom_rec
+            rms_y1_pred = np.sqrt(np.mean(beta_beating_y**2, axis=0))
+            rms_y_b1_pred.append(rms_y1_pred)
             
-                betax = np.array(tw_recons.BETX)
-                betay = np.array(tw_recons.BETY)
 
-                beta_beating_x = (betax-beta_x_b1_nom_rec)/beta_x_b1_nom_rec
-                rms_x1_pred = np.sqrt(np.mean(beta_beating_x**2, axis=0))
-                rms_x_b1_pred.append(rms_x1_pred)
+            bb_x1 = (beta_x_b1[i]-beta_x_b1_nom)/beta_x_b1_nom
+            rms_x1 = np.sqrt(np.mean(bb_x1**2, axis=0))
+            rms_x_b1.append(rms_x1)
 
-                beta_beating_y = (betay-beta_y_b1_nom_rec)/beta_y_b1_nom_rec
-                rms_y1_pred = np.sqrt(np.mean(beta_beating_y**2, axis=0))
-                rms_y_b1_pred.append(rms_y1_pred)
-                
+            bb_y1 = (beta_y_b1[i]-beta_y_b1_nom)/beta_y_b1_nom
+            rms_y1 = np.sqrt(np.mean(bb_y1**2, axis=0))
+            rms_y_b1.append(rms_y1)
+            number +=1
+            #bb_x2 = (beta_x_b2[i]-beta_x_b2_nom)/beta_x_b2_nom
+            #rms_x2 = np.sqrt(np.mean(bb_x2**2, axis=0))
+            #rms_x_b2.append(rms_x2)
 
-                bb_x1 = (beta_x_b1[i]-beta_x_b1_nom)/beta_x_b1_nom
-                rms_x1 = np.sqrt(np.mean(bb_x1**2, axis=0))
-                rms_x_b1.append(rms_x1)
-
-                bb_y1 = (beta_y_b1[i]-beta_y_b1_nom)/beta_y_b1_nom
-                rms_y1 = np.sqrt(np.mean(bb_y1**2, axis=0))
-                rms_y_b1.append(rms_y1)
-                number +=1
-                #bb_x2 = (beta_x_b2[i]-beta_x_b2_nom)/beta_x_b2_nom
-                #rms_x2 = np.sqrt(np.mean(bb_x2**2, axis=0))
-                #rms_x_b2.append(rms_x2)
-
-                #bb_y2 = (beta_y_b2[i]-beta_y_b2_nom)/beta_y_b2_nom
-                #rms_y2 = np.sqrt(np.mean(bb_y2**2, axis=0))
-                #rms_y_b2.append(rms_y2) 
-            except Exception as e:
-                # Code to handle the exception
-                print(f"An error occurred with {i}: {e}")
+            #bb_y2 = (beta_y_b2[i]-beta_y_b2_nom)/beta_y_b2_nom
+            #rms_y2 = np.sqrt(np.mean(bb_y2**2, axis=0))
+            #rms_y_b2.append(rms_y2) 
+        except Exception as e:
+            # Code to handle the exception
+            print(f"An error occurred with {i}: {e}")
     print(number)
     #x=np.hstack(beta_beat_x_b1)
-    """
+    
+    
     rms_beta_beat_x_b1 = np.hstack(rms_x_b1)
-    tfs.write("rms_beta_beat_x_b1.tfs", rms_beta_beat_x_b1)
+    rms_beta_beat_x_b1_df = pd.DataFrame({'rms_betabeat': rms_beta_beat_x_b1})
+    tfs.write("./beta_beat/iclude_off_rms_beta_beat_x_b1_0001.tfs", rms_beta_beat_x_b1_df)
     rms_beta_beat_y_b1 = np.hstack(rms_y_b1)
-    tfs.write("rms_beta_beat_y_b1.tfs", rms_beta_beat_y_b1)
+    rms_beta_beat_y_b1_df = pd.DataFrame({'rms_betabeat': rms_beta_beat_y_b1})
+    tfs.write("./beta_beat/iclude_off_rms_beta_beat_y_b1_0001.tfs", rms_beta_beat_y_b1_df)
     #rms_beta_beat_x_b2 = np.hstack(rms_x_b2)
     #rms_beta_beat_y_b2 = np.hstack(rms_y_b2)
     rms_beta_beat_x_b1_pred = np.hstack(rms_x_b1_pred)
-    tfs.write("test_incl_off_rms_beta_beat_x_b1_corrected.tfs", rms_beta_beat_x_b1_pred)
+    rms_beta_beat_x_b1_pred_df = pd.DataFrame({'rms_betabeat': rms_beta_beat_x_b1_pred})
+    tfs.write("./beta_beat/iclude_off_rms_beta_beat_x_b1_corrected_errors_and_off_0001.tfs", rms_beta_beat_x_b1_pred_df)
     rms_beta_beat_y_b1_pred = np.hstack(rms_y_b1_pred)
-    tfs.write("rms_beta_beat_y_b1_corrected.tfs", rms_beta_beat_y_b1_pred)
-
+    rms_beta_beat_y_b1_pred_df = pd.DataFrame({'rms_betabeat': rms_beta_beat_y_b1_pred})
+    tfs.write("./beta_beat/iclude_off_rms_beta_beat_y_b1_corrected_errors_and_off_noise_0001.tfs", rms_beta_beat_y_b1_pred_df)
     
-    plt.hist(rms_beta_beat_x_b1, bins=15, color='green', alpha=0.5, label='rms of beta beating beam1, x')
-    plt.hist(rms_beta_beat_x_b1_pred, bins=15, color='blue', alpha=0.5, label='rms of beta beating beam1 corrected x')
+    """
+    bin_edges = np.linspace(0, 1, 16)
+        
+    plt.hist(rms_beta_beat_x_b1, bins=bin_edges, color='green', alpha=0.5, label='rms of beta beating beam1, x')
+    plt.hist(rms_beta_beat_x_b1_pred, bins=bin_edges, color='blue', alpha=0.5, label='rms of beta beating beam1 corrected x')
     plt.xlabel('rms')
     plt.ylabel('Counts')
     plt.title('rms')
     plt.legend()  # Add legend to display labels
     plt.grid(True)
-    plt.savefig("test_incl_off_beta_beat_recons_b1x.pdf")
+    plt.savefig("incl_off_beta_beat_recons_b1x.png")
     plt.show()
 
 
-    plt.hist(rms_beta_beat_y_b1, bins=15, color='green', alpha=0.5, label='rms of beta beating beam1, y')
-    plt.hist(rms_beta_beat_y_b1_pred, bins=15, color='blue', alpha=0.5, label='rms of beta beating beam1 corrected, y')
+    plt.hist(rms_beta_beat_y_b1, bins=bin_edges, color='green', alpha=0.5, label='rms of beta beating beam1, y')
+    plt.hist(rms_beta_beat_y_b1_pred, bins=bin_edges, color='blue', alpha=0.5, label='rms of beta beating beam1 corrected, y')
     plt.xlabel('rms')
     plt.ylabel('Counts')
     plt.title('rms')
     plt.legend()  # Add legend to display labels
     plt.grid(True)
-    plt.savefig("beta_beat_recons_b1y.pdf")
+    plt.savefig("incl_off_beta_beat_recons_b1y.png")
     plt.show() 
     """
 def uppercase_twiss(tw_df):
@@ -310,9 +342,46 @@ def make_twiss_good(tw):
 
 example = tfs.read("b1_nominal_monitors.dat").set_index("NAME")
 data_path = "data_include_offset"
-noise = 1E-4
+test_data_path = "test_data_with_off"
+noise = 1E-3
 Nth_array=68
 mdx = madx.Madx()
+estimator = load('./estimators/test_2_triplet_phases_028_ridge_0.0001.pkl')
+loaded_estimator_ph = load('./estimators/triplet_phases_only_028_ridge_0.001.pkl')
+loaded_estimator_ph_betastar = load('./estimators/with_betastar_triplet_phases_028_ridge_0.0001.pkl')
+new_estimator = load('./estimators/with_offset_test_for_new_data_with_betastar_triplet_phases_028_alpha_0.001_ridge_0.01.pkl')
+beta_beat_dist(test_data_path, noise, new_estimator, mdx)
+
+"""
+dpp_1 = tfs.read("./predicted_errors/pred_dpp_1.tfs")
+dpp_2 = tfs.read("./predicted_errors/pred_dpp_2.tfs")
+pred_triplet_err = tfs.read("./predicted_errors/pred_triplet_incl_off.tfs")
+dpp_1_array = np.array(dpp_1)
+dpp_2_array = np.array(dpp_2)
+pred_triplet_err_array = np.array(pred_triplet_err)
+
+
+save_np_errors_tfs(pred_triplet_err_array[9])
+save_errors_rel_formal()
+
+x = recons_twiss_with_off(1, mdx, 0.0001, 0.0003)
+print(x)
+print(pred_triplet_err_array[9])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #loaded_estimator = load('./estimators/test_2_triplet_phases_028_ridge_0.0001.pkl')
 #merge_data(data_path, noise, loaded_estimator)
 dpp_1 = tfs.read("./predicted_errors/pred_dpp_1.tfs")
@@ -374,6 +443,6 @@ tw_recons = make_twiss_good(tw_recons_first)
 
 print(deltap_1[0])
 
-
+"""
 
 
