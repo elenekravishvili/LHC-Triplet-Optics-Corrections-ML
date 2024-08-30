@@ -10,7 +10,8 @@ from sklearn.metrics import mean_absolute_error
 import joblib
 
 from plots import plot_noise_vs_metrics
-from plots import plot_learning_curve
+#from plots import plot_learning_curve
+from twiss_check import plot_learning_curve
 
 from data_utils import load_data
 from data_utils import merge_data
@@ -23,7 +24,7 @@ import scipy.stats
 
 import tensorflow as tf
 
-tf.random.set_seed(1111)
+#tf.random.set_seed(1111)
 np.random.seed(1111)
 random.seed(1111)
 
@@ -34,7 +35,9 @@ Script for training and validating models
 GEN_TEST_SPLIT = True # If a new test split is needed
 
 def main():
-    data_path = "data/"
+    #data_path = "data_phase_adv_triplet/"
+    #data_path = "data_include_offset/"
+    data_path = "data_right_offset/"
     set_name = "100%triplet_ip1_100%ip5_56205"
     TRAIN = True
     MERGE = True
@@ -43,40 +46,41 @@ def main():
     # Train on generated data
     # Load data
     metrics, n_samples = [], []
-    noises = [1e-2] # np.logspace(-5, -2, num=10)
-    
-    # In order to make a robust model noise should be at least be 1e-2
-    
-    for noise in noises:
+    alphas = [0.001]
+    noises = [0.001] #[0.05, 0.01, 0.001, 0.0008, 0.0005, 0.0002, 0.0001, 0.00001]  #[0.00031622776601683794, 0.001]
+    for alpha in alphas:
+        # In order to make a robust model noise should be at least be 1e-2
+        print(alpha)
+        for noise in noises:
+            print(noise)
+            if MERGE == True:
+                input_data, output_data = merge_data(data_path, noise)
 
-        if MERGE == True:
-            input_data, output_data = merge_data(data_path, noise)
+                print(input_data.shape)
+            else:
+                input_data, output_data = load_data(set_name, noise)
 
-            print(input_data.shape)
-        else:
-            input_data, output_data = load_data(set_name, noise)
+                #plt.hist(output_data[:,-1])
+                #plt.hist(output_data[:,-2]) 
+                #plt.hist(output_data[:,-3])
+                #plt.hist(output_data[:,-4])
 
-            #plt.hist(output_data[:,-1])
-            #plt.hist(output_data[:,-2])
-            #plt.hist(output_data[:,-3])
-            #plt.hist(output_data[:,-4])
+            if TRAIN==True:
+                n_splits=10
+                input_data = np.array_split(input_data, n_splits, axis=0)
+                output_data = np.array_split(output_data, n_splits, axis=0)
 
-        if TRAIN==True:
-            n_splits=10
-            input_data = np.array_split(input_data, n_splits, axis=0)
-            output_data = np.array_split(output_data, n_splits, axis=0)
+                for i in range(n_splits):
+                    results = train_model(np.vstack(input_data[:i+1]), np.vstack(output_data[:i+1]),
+                                            algorithm=algorithm, noise=noise, alpha=alpha)
+                    n_samples.append(len(np.vstack(input_data[:i+1])))
+                    metrics.append(results)
 
-            for i in range(n_splits):
-                results = train_model(np.vstack(input_data[:i+1]), np.vstack(output_data[:i+1]),
-                                        algorithm=algorithm, noise=noise)
-                n_samples.append(len(np.vstack(input_data[:i+1])))
-                metrics.append(results)
+                plot_learning_curve(n_samples, metrics, algorithm)
 
-            plot_learning_curve(n_samples, metrics, algorithm)
+        #plot_noise_vs_metrics(noises, metrics, algorithm)
 
-    #plot_noise_vs_metrics(noises, metrics, algorithm)
-
-def train_model(input_data, output_data, algorithm, noise):  
+def train_model(input_data, output_data, algorithm, noise, alpha):  
 
     #Function that loads the data and trains the chosen model with a given noise level
     indices = np.arange(len(input_data))
@@ -84,7 +88,7 @@ def train_model(input_data, output_data, algorithm, noise):
     # Generating new test split or loading old one
     if GEN_TEST_SPLIT==True:
         train_inputs, test_inputs, train_outputs, test_outputs, indices_train, indices_test = train_test_split(
-            input_data, output_data, indices, test_size=0.2, random_state=None)
+            input_data, output_data, indices, test_size=0.2, shuffle=False)
         np.save("./data_analysis/test_idx.npy", indices_test)
         np.save("./data_analysis/train_idx.npy", indices_train)
     else:
@@ -95,9 +99,10 @@ def train_model(input_data, output_data, algorithm, noise):
     
     # create and fit a regression model
     if algorithm == "ridge":
-        ridge = linear_model.Ridge(tol=1e-50, alpha=5e-4) #normalize=false
+        ridge = linear_model.Ridge(tol=1e-50, alpha=alpha) #normalize=false
         estimator = BaggingRegressor(estimator=ridge, n_estimators=10, \
             max_samples=0.9, max_features=1.0, n_jobs=1, verbose=0)
+        #print(train_inputs)
         estimator.fit(train_inputs, train_outputs)
 
     elif algorithm == "linear":
@@ -112,7 +117,7 @@ def train_model(input_data, output_data, algorithm, noise):
         estimator.fit(train_inputs, train_outputs)
 
     # Optionally: save fitted model or load already trained model        
-    joblib.dump(estimator, f'./estimators/triplet_phases_only_028_{algorithm}_{noise}.pkl')          
+    joblib.dump(estimator, f'./estimators/with_off_test_for_new_data_without_betastar_alpha_{alpha}_{algorithm}_{noise}.pkl')          
 
     # Check scores: explained variance and MAE
 
