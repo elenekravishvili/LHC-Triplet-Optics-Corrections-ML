@@ -77,7 +77,7 @@ def get_files_by_noise_alpha(directory):
 
 # Function to calculate RMS
 def calculate_rms(array):
-    #array = array.astype(np.float64)  # Ensure the array is of type float64
+    #array = array.astype(np.float64)
     #return np.sqrt(np.mean(np.square(array), axis=1))
     return np.sqrt(np.mean(np.square(array)))
 
