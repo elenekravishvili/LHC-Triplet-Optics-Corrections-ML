@@ -2,6 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import cpymad.madx
 
+
+#This is separate script for energy offset, for testing. It is not usedn in the, offset job is included in the madx_jobs.py
 class Nominal:
     def __init__(self):
         self.madx = cpymad.madx.Madx()
@@ -19,7 +21,7 @@ class Nominal:
             exec, do_twiss_elements(LHCB1, "twiss_nominal.tfs" 0.0);
         """)
 
-class EnergyDispersion:
+class Energy_offset:
     def __init__(self):
         self.madx = cpymad.madx.Madx()
 
@@ -33,19 +35,17 @@ class EnergyDispersion:
             call, file='/afs/cern.ch/eng/acc-models/lhc/2024/operation/optics/R2024aRP_A30cmC30cmA10mL200cm.madx';
             exec, cycle_sequences();
             use, period = LHCB1;
-            dpp_offset=0.0001;
+            dpp_offset=0.0002;
 
-            do_twiss_elements(use_sequence, output_file): macro = {
-            twiss, chrom, deltap=dpp_offset;
-            };            
+                   
 
-            exec, do_twiss_elements(LHCB1, "twiss_off.tfs");
+            exec, do_twiss_elements(LHCB1, "twiss_off.tfs", dpp_offset);
             ! etable, table="cetab";    
 
                                     
             correct,mode=svd;  
             
-            exec, do_twiss_elements(LHCB1, "twiss_corrected.tfs");
+            exec, do_twiss_elements(LHCB1, "twiss_corrected.tfs", dpp_offset);
             
                         
             match_tunes_dpp(nqx, nqy, beam_number): macro = {
@@ -64,27 +64,28 @@ class EnergyDispersion:
             };
             
             exec, match_tunes_dpp(62.28, 60.31, 1);
-            exec, do_twiss_elements(LHCB1, "twiss_final.tfs");
+            exec, do_twiss_elements(LHCB1, "twiss_final.tfs", dpp_offset);
             
-            ! twiss, chrom, deltap=0.0037;                                    
+            ! twiss, chrom;                                    
         """)
 
 nominal_instance = Nominal()
-energy_disp_instance = EnergyDispersion()
+energy_offset_instance = Energy_offset()
 
+
+"""
 Qx_nom=nominal_instance.madx.table.summ.q1
 Qy_nom=nominal_instance.madx.table.summ.q2 
 deltap_nom=nominal_instance.madx.table.summ.deltap
 
-Qx_offset=energy_disp_instance.madx.table.summ.q1
-Qy_offset=energy_disp_instance.madx.table.summ.q2
-deltap_offset=energy_disp_instance.madx.table.summ.deltap
+Qx_offset=energy_offset_instance.madx.table.summ.q1
+Qy_offset=energy_offset_instance.madx.table.summ.q2
+deltap_offset=energy_offset_instance.madx.table.summ.deltap
 print("nominal tunes:", Qx_nom, Qy_nom)
 print("tunes with energy offset:", Qx_offset, Qy_offset)
 print("nominal offset (0) :", deltap_nom, "offset ofsset:", deltap_offset)
 
-
-
+"""
 
 
 
