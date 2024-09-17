@@ -31,7 +31,7 @@ The following steps outline the process for validating the machine learning pred
 
 ### Step 1: Generate SBS Data
 To begin, generate the SBS data using the script: `sbs_generate.py`
-This script will run `madx_job_sbs.py`, utilizing the predicted values from the estimators created in the earlier model training step. The phase advances for both **B1** and **B2** beams (in both **x** and **y** planes) will be saved.
+This script will run `madx_job_sbs.py`, utilizing the predicted values from the estimators created in the earlier model training step. The phase advances for both **B1** and **B2** beams (in both **x** and **y** directions) will be saved.
 
 ### Step 2: Calculate and Plot RMS Values
 Next, read the SBS-generated data and calculate the RMS values. Use the following script to calculate and plot these values:
